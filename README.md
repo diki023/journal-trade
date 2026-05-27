@@ -1,6 +1,6 @@
 # Micin Trade Journal
 
-Sistem web lokal untuk journal dan backtest trading koin micin/meme coin. Semua trade tersimpan di SQLite lokal lewat backend Node.js + Express sehingga bisa ditambah, diedit, dan dihapus langsung dari web.
+Sistem web untuk journal dan backtest trading koin micin/meme coin. Data disimpan lewat libSQL/Turso agar cocok untuk deploy di Vercel, dengan fallback database lokal untuk development.
 
 ## Stack
 
@@ -11,7 +11,7 @@ Sistem web lokal untuk journal dan backtest trading koin micin/meme coin. Semua 
 - Chart.js
 - Node.js
 - Express
-- SQLite
+- libSQL / Turso
 
 ## Struktur Project
 
@@ -30,7 +30,7 @@ Sistem web lokal untuk journal dan backtest trading koin micin/meme coin. Semua 
 `-- README.md
 ```
 
-Folder `data/` dan file `trades.sqlite` dibuat otomatis saat server pertama kali dipanggil.
+Folder `data/` dan file `trades.sqlite` hanya dipakai untuk development lokal saat `TURSO_DATABASE_URL` belum diisi.
 
 ## Menjalankan Sistem
 
@@ -70,7 +70,7 @@ Jangan buka `index.html` langsung lewat file explorer, karena frontend perlu mem
 - Hapus trade dari History
 - Format MC/liquidity/volume ringkas seperti `100k`, `1m`, `2.5b`
 - Modal tampil sebagai dollar
-- Database lokal SQLite
+- Database libSQL/Turso
 
 ## Struktur Database
 
@@ -84,20 +84,29 @@ holdTime, entryReason, exitReason, notes
 
 ## Backup
 
-Untuk backup data, salin file:
+Untuk development lokal, backup data dengan menyalin file:
 
 ```text
 data/trades.sqlite
 ```
 
-Untuk reset data, hentikan server lalu hapus file tersebut. Sistem akan membuat database baru saat dijalankan lagi.
+Untuk production di Turso, backup dan data management dilakukan dari dashboard/CLI Turso.
 
-## Deploy
+## Deploy ke Vercel
 
-Jangan upload `node_modules/` dan file database lokal. Jalankan `npm install` di server deploy, lalu start dengan:
+Di Vercel, gunakan preset `Express` dan root directory `./`.
+
+Buat database di Turso, lalu isi environment variables di Vercel:
+
+```text
+TURSO_DATABASE_URL=libsql://DATABASE-NAME-ORG.turso.io
+TURSO_AUTH_TOKEN=TOKEN_DARI_TURSO
+```
+
+Build/start command bisa mengikuti default Vercel untuk Express. Untuk lokal:
 
 ```bash
 npm start
 ```
 
-Database akan dibuat otomatis di folder `data/` saat aplikasi berjalan.
+Tabel `trades` akan dibuat otomatis saat server pertama kali berjalan.
