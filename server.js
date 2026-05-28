@@ -8,6 +8,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const app = express();
 const port = Number(process.env.PORT || 3000);
+const publicDir = path.join(__dirname, "public");
 const dataDir = path.join(__dirname, "data");
 const dbPath = path.join(dataDir, "trades.sqlite");
 const databaseUrl = process.env.TURSO_DATABASE_URL || `file:${dbPath}`;
@@ -22,31 +23,46 @@ const db = createClient({
   authToken: databaseAuthToken,
 });
 
-await db.execute(`
-  CREATE TABLE IF NOT EXISTS trades (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    date TEXT NOT NULL,
-    token TEXT NOT NULL,
-    chain TEXT NOT NULL,
-    narrative TEXT NOT NULL,
-    entryMc REAL,
-    liquidity REAL,
-    volume REAL,
-    entryPrice REAL NOT NULL,
-    exitPrice REAL NOT NULL,
-    modal REAL NOT NULL,
-    profitPercent REAL NOT NULL,
-    result TEXT NOT NULL,
-    holdTime TEXT,
-    entryReason TEXT,
-    exitReason TEXT,
-    notes TEXT
-  )
-`);
+let dbInitialized = false;
+async function ensureDb() {
+  if (dbInitialized) return;
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS trades (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      date TEXT NOT NULL,
+      token TEXT NOT NULL,
+      chain TEXT NOT NULL,
+      narrative TEXT NOT NULL,
+      entryMc REAL,
+      liquidity REAL,
+      volume REAL,
+      entryPrice REAL NOT NULL,
+      exitPrice REAL NOT NULL,
+      modal REAL NOT NULL,
+      profitPercent REAL NOT NULL,
+      result TEXT NOT NULL,
+      holdTime TEXT,
+      entryReason TEXT,
+      exitReason TEXT,
+      notes TEXT
+    )
+  `);
+  dbInitialized = true;
+}
 
 app.use(express.json());
-app.use(express.static(__dirname));
+app.use(express.static(publicDir));
+
+// Middleware: pastikan tabel DB sudah dibuat sebelum tiap request
+app.use(async (req, res, next) => {
+  try {
+    await ensureDb();
+    next();
+  } catch (err) {
+    next(err);
+  }
+});
 
 app.get("/api/trades", async (req, res, next) => {
   try {
@@ -93,15 +109,29 @@ app.delete("/api/trades/:id", async (req, res, next) => {
   }
 });
 
+app.get("/", (req, res) => {
+  res.sendFile(path.join(publicDir, "index.html"));
+});
+
+app.get(/^\/(?!api).*/, (req, res) => {
+  res.sendFile(path.join(publicDir, "index.html"));
+});
+
 app.use((err, req, res, next) => {
   console.error(err);
   res.status(500).json({ success: false, message: err.message || "Server error" });
 });
 
-app.listen(port, () => {
-  console.log(`Micin Trade Journal running at http://127.0.0.1:${port}`);
-  console.log(process.env.TURSO_DATABASE_URL ? "Database: Turso/libSQL remote" : "Database: local libSQL file");
-});
+// Jalankan server hanya jika dijalankan langsung (bukan di Vercel serverless)
+if (process.env.NODE_ENV !== "production" || process.env.VERCEL !== "1") {
+  app.listen(port, () => {
+    console.log(`Micin Trade Journal running at http://127.0.0.1:${port}`);
+    console.log(process.env.TURSO_DATABASE_URL ? "Database: Turso/libSQL remote" : "Database: local libSQL file");
+  });
+}
+
+// Export untuk Vercel serverless
+export default app;
 
 async function createTrade(data) {
   await db.execute({
